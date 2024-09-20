@@ -1,4 +1,4 @@
-module github.com/daytonaio/daytona-provider-sample
+module github.com/daytonaio/daytona-provider-gcp
 
 go 1.23.0
 
