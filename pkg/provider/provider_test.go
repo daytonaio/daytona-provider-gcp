@@ -59,7 +59,7 @@ func TestWorkspaceInfo(t *testing.T) {
 	expectedMetadata := types.ToWorkspaceMetadata(vm)
 
 	if expectedMetadata.VirtualMachineId != workspaceMetadata.VirtualMachineId {
-		t.Fatalf("Expected vm id %s, got %s",
+		t.Fatalf("Expected vm id %d, got %d",
 			expectedMetadata.VirtualMachineId,
 			workspaceMetadata.VirtualMachineId,
 		)
