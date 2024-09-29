@@ -33,7 +33,7 @@ func (g *GCPProvider) getTsnetConn() (*tsnet.Server, error) {
 }
 
 func (g *GCPProvider) waitForDial(workspaceId string, dialTimeout time.Duration) error {
-	tsnetConn, err := a.getTsnetConn()
+	tsnetConn, err := g.getTsnetConn()
 	if err != nil {
 		return err
 	}

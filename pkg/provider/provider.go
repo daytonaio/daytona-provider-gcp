@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/daytonaio/daytona-provider-gcp/internal"
 	logwriters "github.com/daytonaio/daytona-provider-gcp/internal/log"
+	gcputil "github.com/daytonaio/daytona-provider-gcp/pkg/provider/util"
 	"github.com/daytonaio/daytona-provider-gcp/pkg/types"
 	"github.com/daytonaio/daytona/pkg/agent/ssh/config"
 	"github.com/daytonaio/daytona/pkg/docker"
@@ -78,10 +80,12 @@ func (g *GCPProvider) CreateWorkspace(workspaceReq *provider.WorkspaceRequest) (
 		return nil, err
 	}
 
-	_ = targetOptions
 	initScript := fmt.Sprintf(`curl -sfL -H "Authorization: Bearer %s" %s | bash`, workspaceReq.Workspace.ApiKey, *g.DaytonaDownloadUrl)
-	_ = initScript
-	//TODO: create vm
+	err = gcputil.CreateWorkspace(workspaceReq.Workspace, targetOptions, initScript, logWriter)
+	if err != nil {
+		logWriter.Write([]byte("Failed to create workspace: " + err.Error() + "\n"))
+		return nil, err
+	}
 
 	agentSpinner := logwriters.ShowSpinner(logWriter, "Waiting for the agent to start", "Agent started")
 	err = g.waitForDial(workspaceReq.Workspace.Id, 10*time.Minute)
@@ -126,9 +130,8 @@ func (g *GCPProvider) StartWorkspace(workspaceReq *provider.WorkspaceRequest) (*
 		logWriter.Write([]byte("Failed to dial: " + err.Error() + "\n"))
 		return nil, err
 	}
-	_ = targetOptions
-	//TODO: start workspace
-	return new(util.Empty), nil
+
+	return new(util.Empty), gcputil.StartWorkspace(workspaceReq.Workspace, targetOptions)
 }
 
 func (g *GCPProvider) StopWorkspace(workspaceReq *provider.WorkspaceRequest) (*util.Empty, error) {
@@ -140,10 +143,8 @@ func (g *GCPProvider) StopWorkspace(workspaceReq *provider.WorkspaceRequest) (*u
 		logWriter.Write([]byte("Failed to parse target options: " + err.Error() + "\n"))
 		return nil, err
 	}
-	_ = targetOptions
 
-	//TODO: start workspace
-	return new(util.Empty), nil
+	return new(util.Empty), gcputil.StopWorkspace(workspaceReq.Workspace, targetOptions)
 }
 
 func (g *GCPProvider) DestroyWorkspace(workspaceReq *provider.WorkspaceRequest) (*util.Empty, error) {
@@ -155,10 +156,8 @@ func (g *GCPProvider) DestroyWorkspace(workspaceReq *provider.WorkspaceRequest) 
 		logWriter.Write([]byte("Failed to parse target options: " + err.Error() + "\n"))
 		return nil, err
 	}
-	_ = targetOptions
 
-	//TODO: delete workspace
-	return new(util.Empty), nil
+	return new(util.Empty), gcputil.DeleteWorkspace(workspaceReq.Workspace, targetOptions)
 }
 
 func (g *GCPProvider) GetWorkspaceInfo(workspaceReq *provider.WorkspaceRequest) (*workspace.WorkspaceInfo, error) {
@@ -306,12 +305,20 @@ func (g *GCPProvider) getWorkspaceInfo(workspaceReq *provider.WorkspaceRequest) 
 		return nil, err
 	}
 
-	_ = targetOptions
-	//TODO: get workspace info
+	vm, err := gcputil.GetComputeInstance(workspaceReq.Workspace, targetOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	metadata := types.ToWorkspaceMetadata(vm)
+	jsonMetadata, err := json.Marshal(metadata)
+	if err != nil {
+		return nil, err
+	}
 
 	return &workspace.WorkspaceInfo{
 		Name:             workspaceReq.Workspace.Name,
-		ProviderMetadata: string(""),
+		ProviderMetadata: string(jsonMetadata),
 	}, nil
 }
 

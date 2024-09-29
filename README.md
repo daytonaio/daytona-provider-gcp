@@ -14,8 +14,6 @@ This repository is the home of the <a href="https://github.com/daytonaio/daytona
 </div>
 </br>
 
-> [!NOTE]
-> After you create a repository, you can run `./hack/replace-name.sh` to easily configure the repo based on the name of your provider. Feel free to remove the `hack` folder after that.
 
 <p align="center">
   <a href="https://github.com/daytonaio/daytona-provider-gcp/issues/new?assignees=&labels=bug&projects=&template=bug_report.md&title=%F0%9F%90%9B+Bug+Report%3A+">Report Bug</a>
@@ -27,25 +25,29 @@ This repository is the home of the <a href="https://github.com/daytonaio/daytona
   <a href="https://x.com/Daytonaio">X</a>
 </p>
 
-> [!TIP]
-> Write a description of your Provider here. 
+
+The GCP Provider allows Daytona to create and manage workspace projects on Google Cloud Platform compute instances.
+
+To use the GCP Provider for managing compute instances, you'll need to create a service account with the `Compute Admin` role. 
+Download the service account key in JSON format and provide it to the GCP provider for authentication
+
+Detailed instructions on create and configuring the service account can be found [here](https://cloud.google.com/iam/docs/service-accounts-create#console)
 
 ## Target Options
 
-| Property                	| Type     	| Optional 	| DefaultValue                	| InputMasked 	| DisabledPredicate 	|
-|-------------------------	|----------	|----------	|-----------------------------	|-------------	|-------------------	|
-| Required String         	| String   	| false    	| default-required-string     	| false       	|                   	|
-| Optional String           | String   	| true     	|                             	| true         	|                   	|
-| Optional Int             	| Int      	| true     	|                             	| false       	|                   	|
-| FilePath                	| FilePath 	| true     	| ~/.ssh                        | false       	| ^default-target$    |
+| Property                	        | Type     	    | Optional 	  | DefaultValue                	                                 | InputMasked 	   | DisabledPredicate 	 |
+|----------------------------------|---------------|-------------|---------------------------------------------------------------|-----------------|---------------------|
+| Zone         	                   | String   	    | true    	   | us-central1-a   	                                             | false       	   | 	                   |
+| Machine Type                     | String   	    | true     	  | n1-standard-1                          	                      | false         	 | 	                   |
+| Disk Type             	          | String      	 | true     	  | 	    pd-standard                                              | false       	   | 	                   |
+| Disk Size                	       | Int 	         | true     	  | 20                                                            | false       	   |                     |
+| VM Image                	        | String 	      | true     	  | projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts | false       	   |                     |
+| Credential File                	 | FilePath 	    | false     	 |                                                               | true       	    |                     |
+| Project Id                	      | String 	      | false     	 |                                                               | true       	    |                     |
 
 ### Default Targets
 
-#### Local
-| Property        	| Value                       	|
-|-----------------	|-----------------------------	|
-| Required String 	| default-required-string      	|
-
+The GCP Provider has no default targets. Before using the provider you must set the target using the daytona target set command.
 
 ## Code of Conduct
 
