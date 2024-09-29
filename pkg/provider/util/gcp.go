@@ -25,7 +25,7 @@ curl -fsSL https://get.docker.com | bash
 # Modify Docker daemon configuration
 cat > /etc/docker/daemon.json <<EOF
 {
-  "hosts": ["unix:///var/run/docker.sock", "tcp://0.0.0.0:2375"]
+  "hosts": ["unix:///var/run/docker.sock", "tcp://127.0.0.1:2375"]
 }
 EOF
 
@@ -150,7 +150,7 @@ func createComputeInstance(workspaceId string, initScript string, opts *types.Ta
 	machineType := fmt.Sprintf("zones/%s/machineTypes/%s", opts.Zone, opts.MachineType)
 	diskType := fmt.Sprintf("projects/%s/zones/%s/diskTypes/%s", opts.ProjectID, opts.Zone, opts.DiskType)
 
-	spinner := logwriters.ShowSpinner(logWriter, "Creating GCP virtual machine", "GCP virtual machine created")
+	spinner := logwriters.ShowSpinner(logWriter, "Creating GCP compute instance", "GCP compute instance created")
 	operation, err := instancesClient.Insert(context.Background(), &computepb.InsertInstanceRequest{
 		Project: opts.ProjectID,
 		Zone:    opts.Zone,
