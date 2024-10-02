@@ -42,7 +42,7 @@ Detailed instructions on create and configuring the service account can be found
 | Disk Type             	          | String      	 | true     	  | 	    pd-standard                                              | false       	   | 	                   |
 | Disk Size                	       | Int 	         | true     	  | 20                                                            | false       	   |                     |
 | VM Image                	        | String 	      | true     	  | projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts | false       	   |                     |
-| Credential File                	 | FilePath 	    | false     	 |                                                               | true       	    |                     |
+| Credential File                	 | FilePath 	    | false     	 |                                                               | false       	   |                     |
 | Project Id                	      | String 	      | false     	 |                                                               | true       	    |                     |
 
 ### Default Targets

@@ -21,10 +21,10 @@ type TargetOptions struct {
 func GetTargetManifest() *provider.ProviderTargetManifest {
 	return &provider.ProviderTargetManifest{
 		"Credential File": provider.ProviderTargetProperty{
-			Type:        provider.ProviderTargetPropertyTypeFilePath,
-			InputMasked: true,
+			Type: provider.ProviderTargetPropertyTypeFilePath,
 			Description: "Full path to the GCP service account JSON key file.\nLeave blank if you've set the GCP_CREDENTIAL_FILE" +
 				"environment variable.\nEnsure that the file is secure and accessible only to authorized users.",
+			DefaultValue: "~/.config/gcloud",
 		},
 		"Project Id": provider.ProviderTargetProperty{
 			Type:        provider.ProviderTargetPropertyTypeString,
