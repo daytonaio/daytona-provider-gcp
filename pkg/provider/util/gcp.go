@@ -194,9 +194,10 @@ func createComputeInstance(workspaceId string, initScript string, opts *types.Ta
 		close(spinner)
 		return err
 	}
-	defer func() { close(spinner) }()
 
-	return operation.Wait(context.Background())
+	err = operation.Wait(context.Background())
+	close(spinner)
+	return err
 }
 
 func GetComputeInstance(workspace *workspace.Workspace, opts *types.TargetOptions) (*computepb.Instance, error) {
