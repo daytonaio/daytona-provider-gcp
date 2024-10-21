@@ -735,6 +735,8 @@ github.com/daytonaio/daytona v0.36.0 h1:8Q7w1pTzmOBwLJrI3hF6UobZnhTnsy04fjEAkhGd
 github.com/daytonaio/daytona v0.36.0/go.mod h1:ZZ+sA66/4715zoWUbtpjNb2VfueJ8uHxCZAayUhDzAw=
 github.com/daytonaio/daytona v0.39.0 h1:iW+G+sNjBK7ZcObJ3RrIRqeoKpI6Fh9OIWkZNiUJZ3o=
 github.com/daytonaio/daytona v0.39.0/go.mod h1:ZZ+sA66/4715zoWUbtpjNb2VfueJ8uHxCZAayUhDzAw=
+github.com/daytonaio/daytona v0.40.0 h1:+EUCUbKXJSP+QJOGglz38J8/Q9vtuItJb6YZx8Uv0p8=
+github.com/daytonaio/daytona v0.40.0/go.mod h1:ZZ+sA66/4715zoWUbtpjNb2VfueJ8uHxCZAayUhDzAw=
 github.com/dblohm7/wingoes v0.0.0-20240123200102-b75a8a7d7eb0 h1:vrC07UZcgPzu/OjWsmQKMGg3LoPSz9jh/pQXIrHjUj4=
 github.com/dblohm7/wingoes v0.0.0-20240123200102-b75a8a7d7eb0/go.mod h1:Nx87SkVqTKd8UtT+xu7sM/l+LgXs6c0aHrlKusR+2EQ=
 github.com/digitalocean/go-smbios v0.0.0-20180907143718-390a4f403a8e h1:vUmf0yezR0y7jJ5pceLHthLaYf4bA5T14B6q39S4q2Q=

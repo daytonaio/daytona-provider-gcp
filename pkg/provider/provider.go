@@ -63,7 +63,7 @@ func (g *GCPProvider) GetTargetManifest() (*provider.ProviderTargetManifest, err
 	return types.GetTargetManifest(), nil
 }
 
-func (g *GCPProvider) GetDefaultTargets() (*[]provider.ProviderTarget, error) {
+func (g *GCPProvider) GetPresetTargets() (*[]provider.ProviderTarget, error) {
 	return new([]provider.ProviderTarget), nil
 }
 

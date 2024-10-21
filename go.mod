@@ -7,7 +7,7 @@ replace github.com/docker/go-connections => github.com/docker/go-connections v0.
 
 require (
 	cloud.google.com/go/compute v1.20.1
-	github.com/daytonaio/daytona v0.39.0
+	github.com/daytonaio/daytona v0.40.0
 	github.com/docker/docker v27.2.0+incompatible
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-hclog v1.6.3

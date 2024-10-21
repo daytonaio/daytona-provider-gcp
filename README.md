@@ -12,8 +12,6 @@
 <div align="center">
 This repository is the home of the <a href="https://github.com/daytonaio/daytona">Daytona</a> GCP Provider.
 </div>
-</br>
-
 
 <p align="center">
   <a href="https://github.com/daytonaio/daytona-provider-gcp/issues/new?assignees=&labels=bug&projects=&template=bug_report.md&title=%F0%9F%90%9B+Bug+Report%3A+">Report Bug</a>
@@ -35,19 +33,19 @@ Detailed instructions on create and configuring the service account can be found
 
 ## Target Options
 
-| Property                	        | Type     	    | Optional 	  | DefaultValue                	                                 | InputMasked 	   | DisabledPredicate 	 |
-|----------------------------------|---------------|-------------|---------------------------------------------------------------|-----------------|---------------------|
-| Zone         	                   | String   	    | true    	   | us-central1-a   	                                             | false       	   | 	                   |
-| Machine Type                     | String   	    | true     	  | n1-standard-1                          	                      | false         	 | 	                   |
-| Disk Type             	          | String      	 | true     	  | 	    pd-standard                                              | false       	   | 	                   |
-| Disk Size                	       | Int 	         | true     	  | 20                                                            | false       	   |                     |
-| VM Image                	        | String 	      | true     	  | projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts | false       	   |                     |
-| Credential File                	 | FilePath 	    | false     	 |                                                               | false       	   |                     |
-| Project Id                	      | String 	      | false     	 |                                                               | true       	    |                     |
+| Property        | Type     | Optional | DefaultValue                	                                  | InputMasked | DisabledPredicate           |
+|-----------------|----------|----------|----------------------------------------------------------------|-------------|-----------------------------|
+| Zone            | String   | true     | us-central1-a   	                                              | false       | 	                          |
+| Machine Type    | String   | true     | n1-standard-1                          	                      | false       | 	                          |
+| Disk Type       | String   | true     | pd-standard                                                    | false       | 	                          |
+| Disk Size       | Int      | true     | 20                                                             | false       |                             |
+| VM Image        | String   | true     | projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts  | false       |                             |
+| Credential File | FilePath | false    |                                                                | false       |                             |
+| Project Id      | String   | false    |                                                                | true        |                             |
 
-### Default Targets
+### Preset Targets
 
-The GCP Provider has no default targets. Before using the provider you must set the target using the daytona target set command.
+The GCP Provider has no preset targets. Before using the provider you must set the target using the daytona target set command.
 
 ## Code of Conduct
 
