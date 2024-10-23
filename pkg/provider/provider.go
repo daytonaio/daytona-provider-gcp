@@ -53,7 +53,10 @@ func (g *GCPProvider) Initialize(req provider.InitializeProviderRequest) (*util.
 }
 
 func (g *GCPProvider) GetInfo() (provider.ProviderInfo, error) {
+	label := "GCP"
+
 	return provider.ProviderInfo{
+		Label:   &label,
 		Name:    "gcp-provider",
 		Version: internal.Version,
 	}, nil
