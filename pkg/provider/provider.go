@@ -353,7 +353,7 @@ func (g *GCPProvider) getProjectLogWriter(workspaceId string, projectName string
 	return logWriter, cleanupFunc
 }
 
-func (a *GCPProvider) CheckRequirements() (*[]provider.RequirementStatus, error) {
+func (g *GCPProvider) CheckRequirements() (*[]provider.RequirementStatus, error) {
 	results := []provider.RequirementStatus{}
 	return &results, nil
 }
