@@ -353,6 +353,11 @@ func (g *GCPProvider) getProjectLogWriter(workspaceId string, projectName string
 	return logWriter, cleanupFunc
 }
 
+func (a *GCPProvider) CheckRequirements() (*[]provider.RequirementStatus, error) {
+	results := []provider.RequirementStatus{}
+	return &results, nil
+}
+
 func getWorkspaceDir(workspaceId string) string {
 	return fmt.Sprintf("/home/daytona/%s", workspaceId)
 }
