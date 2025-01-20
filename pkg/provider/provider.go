@@ -14,15 +14,14 @@ import (
 	"github.com/daytonaio/daytona-provider-gcp/pkg/types"
 	"github.com/daytonaio/daytona/pkg/agent/ssh/config"
 	"github.com/daytonaio/daytona/pkg/docker"
+	"github.com/daytonaio/daytona/pkg/models"
 	"github.com/daytonaio/daytona/pkg/ssh"
 	"github.com/daytonaio/daytona/pkg/tailscale"
-	"github.com/daytonaio/daytona/pkg/workspace/project"
 	"tailscale.com/tsnet"
 
 	"github.com/daytonaio/daytona/pkg/logs"
 	"github.com/daytonaio/daytona/pkg/provider"
 	"github.com/daytonaio/daytona/pkg/provider/util"
-	"github.com/daytonaio/daytona/pkg/workspace"
 )
 
 type GCPProvider struct {
@@ -32,9 +31,11 @@ type GCPProvider struct {
 	ServerUrl          *string
 	NetworkKey         *string
 	ApiUrl             *string
+	ApiKey             *string
 	ApiPort            *uint32
 	ServerPort         *uint32
-	LogsDir            *string
+	TargetLogsDir      *string
+	WorkspaceLogsDir   *string
 	tsnetConn          *tsnet.Server
 }
 
@@ -45,68 +46,67 @@ func (g *GCPProvider) Initialize(req provider.InitializeProviderRequest) (*util.
 	g.ServerUrl = &req.ServerUrl
 	g.NetworkKey = &req.NetworkKey
 	g.ApiUrl = &req.ApiUrl
+	g.ApiKey = req.ApiKey
 	g.ApiPort = &req.ApiPort
 	g.ServerPort = &req.ServerPort
-	g.LogsDir = &req.LogsDir
+	g.TargetLogsDir = &req.TargetLogsDir
+	g.WorkspaceLogsDir = &req.WorkspaceLogsDir
 
 	return new(util.Empty), nil
 }
 
-func (g *GCPProvider) GetInfo() (provider.ProviderInfo, error) {
+func (g *GCPProvider) GetInfo() (models.ProviderInfo, error) {
 	label := "GCP"
 
-	return provider.ProviderInfo{
-		Label:   &label,
-		Name:    "gcp-provider",
-		Version: internal.Version,
+	return models.ProviderInfo{
+		Label:                &label,
+		Name:                 "gcp-provider",
+		Version:              internal.Version,
+		TargetConfigManifest: *types.GetTargetConfigManifest(),
 	}, nil
 }
 
-func (g *GCPProvider) GetTargetManifest() (*provider.ProviderTargetManifest, error) {
-	return types.GetTargetManifest(), nil
+func (g *GCPProvider) GetPresetTargetConfigs() (*[]provider.TargetConfig, error) {
+	return new([]provider.TargetConfig), nil
 }
 
-func (g *GCPProvider) GetPresetTargets() (*[]provider.ProviderTarget, error) {
-	return new([]provider.ProviderTarget), nil
-}
-
-func (g *GCPProvider) CreateWorkspace(workspaceReq *provider.WorkspaceRequest) (*util.Empty, error) {
+func (g *GCPProvider) CreateTarget(targetReq *provider.TargetRequest) (*util.Empty, error) {
 	if g.DaytonaDownloadUrl == nil {
 		return nil, errors.New("DaytonaDownloadUrl not set. Did you forget to call Initialize")
 	}
-	logWriter, cleanupFunc := g.getWorkspaceLogWriter(workspaceReq.Workspace.Id)
+	logWriter, cleanupFunc := g.getTargetLogWriter(targetReq.Target.Id, targetReq.Target.Name)
 	defer cleanupFunc()
 
-	targetOptions, err := types.ParseTargetOptions(workspaceReq.TargetOptions)
+	targetOptions, err := types.ParseTargetOptions(targetReq.Target.TargetConfig.Options)
 	if err != nil {
 		logWriter.Write([]byte("Failed to parse target options: " + err.Error() + "\n"))
 		return nil, err
 	}
 
-	initScript := fmt.Sprintf(`curl -sfL -H "Authorization: Bearer %s" %s | bash`, workspaceReq.Workspace.ApiKey, *g.DaytonaDownloadUrl)
-	err = gcputil.CreateWorkspace(workspaceReq.Workspace, targetOptions, initScript, logWriter)
+	initScript := fmt.Sprintf(`curl -sfL -H "Authorization: Bearer %s" %s | bash`, targetReq.Target.ApiKey, *g.DaytonaDownloadUrl)
+	err = gcputil.CreateTarget(targetReq.Target, targetOptions, initScript, logWriter)
 	if err != nil {
-		logWriter.Write([]byte("Failed to create workspace: " + err.Error() + "\n"))
+		logWriter.Write([]byte("Failed to create target: " + err.Error() + "\n"))
 		return nil, err
 	}
 
 	agentSpinner := logwriters.ShowSpinner(logWriter, "Waiting for the agent to start", "Agent started")
-	err = g.waitForDial(workspaceReq.Workspace.Id, 10*time.Minute)
+	err = g.waitForDial(targetReq.Target.Id, 10*time.Minute)
 	close(agentSpinner)
 	if err != nil {
 		logWriter.Write([]byte("Failed to dial: " + err.Error() + "\n"))
 		return nil, err
 	}
 
-	client, err := g.getDockerClient(workspaceReq.Workspace.Id)
+	client, err := g.getDockerClient(targetReq.Target.Id)
 	if err != nil {
 		logWriter.Write([]byte("Failed to get client: " + err.Error() + "\n"))
 		return nil, err
 	}
 
-	workspaceDir := getWorkspaceDir(workspaceReq.Workspace.Id)
+	targetDir := getTargetDir(targetReq.Target.Id)
 	sshClient, err := tailscale.NewSshClient(g.tsnetConn, &ssh.SessionConfig{
-		Hostname: workspaceReq.Workspace.Id,
+		Hostname: targetReq.Target.Id,
 		Port:     config.SSH_PORT,
 	})
 	if err != nil {
@@ -115,89 +115,67 @@ func (g *GCPProvider) CreateWorkspace(workspaceReq *provider.WorkspaceRequest) (
 	}
 	defer sshClient.Close()
 
-	return new(util.Empty), client.CreateWorkspace(workspaceReq.Workspace, workspaceDir, logWriter, sshClient)
+	return new(util.Empty), client.CreateTarget(targetReq.Target, targetDir, logWriter, sshClient)
 }
 
-func (g *GCPProvider) StartWorkspace(workspaceReq *provider.WorkspaceRequest) (*util.Empty, error) {
-	logWriter, cleanupFunc := g.getWorkspaceLogWriter(workspaceReq.Workspace.Id)
+func (g *GCPProvider) StartTarget(targetReq *provider.TargetRequest) (*util.Empty, error) {
+	logWriter, cleanupFunc := g.getTargetLogWriter(targetReq.Target.Id, targetReq.Target.Name)
 	defer cleanupFunc()
 
-	targetOptions, err := types.ParseTargetOptions(workspaceReq.TargetOptions)
+	targetOptions, err := types.ParseTargetOptions(targetReq.Target.TargetConfig.Options)
 	if err != nil {
 		logWriter.Write([]byte("Failed to parse target options: " + err.Error() + "\n"))
 		return nil, err
 	}
 
-	err = g.waitForDial(workspaceReq.Workspace.Id, 10*time.Minute)
+	err = g.waitForDial(targetReq.Target.Id, 10*time.Minute)
 	if err != nil {
 		logWriter.Write([]byte("Failed to dial: " + err.Error() + "\n"))
 		return nil, err
 	}
 
-	return new(util.Empty), gcputil.StartWorkspace(workspaceReq.Workspace, targetOptions)
+	return new(util.Empty), gcputil.StartTarget(targetReq.Target, targetOptions)
 }
 
-func (g *GCPProvider) StopWorkspace(workspaceReq *provider.WorkspaceRequest) (*util.Empty, error) {
-	logWriter, cleanupFunc := g.getWorkspaceLogWriter(workspaceReq.Workspace.Id)
+func (g *GCPProvider) StopTarget(targetReq *provider.TargetRequest) (*util.Empty, error) {
+	logWriter, cleanupFunc := g.getTargetLogWriter(targetReq.Target.Id, targetReq.Target.Name)
 	defer cleanupFunc()
 
-	targetOptions, err := types.ParseTargetOptions(workspaceReq.TargetOptions)
+	targetOptions, err := types.ParseTargetOptions(targetReq.Target.TargetConfig.Options)
 	if err != nil {
 		logWriter.Write([]byte("Failed to parse target options: " + err.Error() + "\n"))
 		return nil, err
 	}
 
-	return new(util.Empty), gcputil.StopWorkspace(workspaceReq.Workspace, targetOptions)
+	return new(util.Empty), gcputil.StopTarget(targetReq.Target, targetOptions)
 }
 
-func (g *GCPProvider) DestroyWorkspace(workspaceReq *provider.WorkspaceRequest) (*util.Empty, error) {
-	logWriter, cleanupFunc := g.getWorkspaceLogWriter(workspaceReq.Workspace.Id)
+func (g *GCPProvider) DestroyTarget(targetReq *provider.TargetRequest) (*util.Empty, error) {
+	logWriter, cleanupFunc := g.getTargetLogWriter(targetReq.Target.Id, targetReq.Target.Name)
 	defer cleanupFunc()
 
-	targetOptions, err := types.ParseTargetOptions(workspaceReq.TargetOptions)
+	targetOptions, err := types.ParseTargetOptions(targetReq.Target.TargetConfig.Options)
 	if err != nil {
 		logWriter.Write([]byte("Failed to parse target options: " + err.Error() + "\n"))
 		return nil, err
 	}
 
-	return new(util.Empty), gcputil.DeleteWorkspace(workspaceReq.Workspace, targetOptions)
+	return new(util.Empty), gcputil.DeleteTarget(targetReq.Target, targetOptions)
 }
 
-func (g *GCPProvider) GetWorkspaceInfo(workspaceReq *provider.WorkspaceRequest) (*workspace.WorkspaceInfo, error) {
-	workspaceInfo, err := g.getWorkspaceInfo(workspaceReq)
-	if err != nil {
-		return nil, err
-	}
-
-	var projectInfos []*project.ProjectInfo
-	for _, project := range workspaceReq.Workspace.Projects {
-		projectInfo, err := g.GetProjectInfo(&provider.ProjectRequest{
-			TargetOptions: workspaceReq.TargetOptions,
-			Project:       project,
-		})
-		if err != nil {
-			return nil, err
-		}
-		projectInfos = append(projectInfos, projectInfo)
-	}
-	workspaceInfo.Projects = projectInfos
-
-	return workspaceInfo, nil
-}
-
-func (g *GCPProvider) CreateProject(projectReq *provider.ProjectRequest) (*util.Empty, error) {
-	logWriter, cleanupFunc := g.getProjectLogWriter(projectReq.Project.WorkspaceId, projectReq.Project.Name)
+func (g *GCPProvider) CreateWorkspace(workspaceReq *provider.WorkspaceRequest) (*util.Empty, error) {
+	logWriter, cleanupFunc := g.getWorkspaceLogWriter(workspaceReq.Workspace.Id, workspaceReq.Workspace.Name)
 	defer cleanupFunc()
 	logWriter.Write([]byte("\033[?25h\n"))
 
-	dockerClient, err := g.getDockerClient(projectReq.Project.WorkspaceId)
+	dockerClient, err := g.getDockerClient(workspaceReq.Workspace.TargetId)
 	if err != nil {
 		logWriter.Write([]byte("Failed to get docker client: " + err.Error() + "\n"))
 		return nil, err
 	}
 
 	sshClient, err := tailscale.NewSshClient(g.tsnetConn, &ssh.SessionConfig{
-		Hostname: projectReq.Project.WorkspaceId,
+		Hostname: workspaceReq.Workspace.TargetId,
 		Port:     config.SSH_PORT,
 	})
 	if err != nil {
@@ -206,33 +184,32 @@ func (g *GCPProvider) CreateProject(projectReq *provider.ProjectRequest) (*util.
 	}
 	defer sshClient.Close()
 
-	return new(util.Empty), dockerClient.CreateProject(&docker.CreateProjectOptions{
-		Project:                  projectReq.Project,
-		ProjectDir:               getProjectDir(projectReq),
-		ContainerRegistry:        projectReq.ContainerRegistry,
-		BuilderImage:             projectReq.BuilderImage,
-		BuilderContainerRegistry: projectReq.BuilderContainerRegistry,
-		LogWriter:                logWriter,
-		Gpc:                      projectReq.GitProviderConfig,
-		SshClient:                sshClient,
+	return new(util.Empty), dockerClient.CreateWorkspace(&docker.CreateWorkspaceOptions{
+		Workspace:           workspaceReq.Workspace,
+		WorkspaceDir:        getWorkspaceDir(workspaceReq),
+		ContainerRegistries: workspaceReq.ContainerRegistries,
+		BuilderImage:        workspaceReq.BuilderImage,
+		LogWriter:           logWriter,
+		Gpc:                 workspaceReq.GitProviderConfig,
+		SshClient:           sshClient,
 	})
 }
 
-func (g *GCPProvider) StartProject(projectReq *provider.ProjectRequest) (*util.Empty, error) {
+func (g *GCPProvider) StartWorkspace(workspaceReq *provider.WorkspaceRequest) (*util.Empty, error) {
 	if g.DaytonaDownloadUrl == nil {
 		return nil, errors.New("DaytonaDownloadUrl not set. Did you forget to call Initialize")
 	}
-	logWriter, cleanupFunc := g.getProjectLogWriter(projectReq.Project.WorkspaceId, projectReq.Project.Name)
+	logWriter, cleanupFunc := g.getWorkspaceLogWriter(workspaceReq.Workspace.Id, workspaceReq.Workspace.Name)
 	defer cleanupFunc()
 
-	dockerClient, err := g.getDockerClient(projectReq.Project.WorkspaceId)
+	dockerClient, err := g.getDockerClient(workspaceReq.Workspace.TargetId)
 	if err != nil {
 		logWriter.Write([]byte("Failed to get docker client: " + err.Error() + "\n"))
 		return nil, err
 	}
 
 	sshClient, err := tailscale.NewSshClient(g.tsnetConn, &ssh.SessionConfig{
-		Hostname: projectReq.Project.WorkspaceId,
+		Hostname: workspaceReq.Workspace.TargetId,
 		Port:     config.SSH_PORT,
 	})
 	if err != nil {
@@ -241,43 +218,42 @@ func (g *GCPProvider) StartProject(projectReq *provider.ProjectRequest) (*util.E
 	}
 	defer sshClient.Close()
 
-	return new(util.Empty), dockerClient.StartProject(&docker.CreateProjectOptions{
-		Project:                  projectReq.Project,
-		ProjectDir:               getProjectDir(projectReq),
-		ContainerRegistry:        projectReq.ContainerRegistry,
-		BuilderImage:             projectReq.BuilderImage,
-		BuilderContainerRegistry: projectReq.BuilderContainerRegistry,
-		LogWriter:                logWriter,
-		Gpc:                      projectReq.GitProviderConfig,
-		SshClient:                sshClient,
+	return new(util.Empty), dockerClient.StartWorkspace(&docker.CreateWorkspaceOptions{
+		Workspace:           workspaceReq.Workspace,
+		WorkspaceDir:        getWorkspaceDir(workspaceReq),
+		ContainerRegistries: workspaceReq.ContainerRegistries,
+		BuilderImage:        workspaceReq.BuilderImage,
+		LogWriter:           logWriter,
+		Gpc:                 workspaceReq.GitProviderConfig,
+		SshClient:           sshClient,
 	}, *g.DaytonaDownloadUrl)
 }
 
-func (g *GCPProvider) StopProject(projectReq *provider.ProjectRequest) (*util.Empty, error) {
-	logWriter, cleanupFunc := g.getProjectLogWriter(projectReq.Project.WorkspaceId, projectReq.Project.Name)
+func (g *GCPProvider) StopWorkspace(workspaceReq *provider.WorkspaceRequest) (*util.Empty, error) {
+	logWriter, cleanupFunc := g.getWorkspaceLogWriter(workspaceReq.Workspace.Id, workspaceReq.Workspace.Name)
 	defer cleanupFunc()
 
-	dockerClient, err := g.getDockerClient(projectReq.Project.WorkspaceId)
+	dockerClient, err := g.getDockerClient(workspaceReq.Workspace.TargetId)
 	if err != nil {
 		logWriter.Write([]byte("Failed to get docker client: " + err.Error() + "\n"))
 		return nil, err
 	}
 
-	return new(util.Empty), dockerClient.StopProject(projectReq.Project, logWriter)
+	return new(util.Empty), dockerClient.StopWorkspace(workspaceReq.Workspace, logWriter)
 }
 
-func (g *GCPProvider) DestroyProject(projectReq *provider.ProjectRequest) (*util.Empty, error) {
-	logWriter, cleanupFunc := g.getProjectLogWriter(projectReq.Project.WorkspaceId, projectReq.Project.Name)
+func (g *GCPProvider) DestroyWorkspace(workspaceReq *provider.WorkspaceRequest) (*util.Empty, error) {
+	logWriter, cleanupFunc := g.getWorkspaceLogWriter(workspaceReq.Workspace.Id, workspaceReq.Workspace.Name)
 	defer cleanupFunc()
 
-	dockerClient, err := g.getDockerClient(projectReq.Project.WorkspaceId)
+	dockerClient, err := g.getDockerClient(workspaceReq.Workspace.TargetId)
 	if err != nil {
 		logWriter.Write([]byte("Failed to get docker client: " + err.Error() + "\n"))
 		return nil, err
 	}
 
 	sshClient, err := tailscale.NewSshClient(g.tsnetConn, &ssh.SessionConfig{
-		Hostname: projectReq.Project.WorkspaceId,
+		Hostname: workspaceReq.Workspace.TargetId,
 		Port:     config.SSH_PORT,
 	})
 	if err != nil {
@@ -286,72 +262,84 @@ func (g *GCPProvider) DestroyProject(projectReq *provider.ProjectRequest) (*util
 	}
 	defer sshClient.Close()
 
-	return new(util.Empty), dockerClient.DestroyProject(projectReq.Project, getProjectDir(projectReq), sshClient)
+	return new(util.Empty), dockerClient.DestroyWorkspace(workspaceReq.Workspace, getWorkspaceDir(workspaceReq), sshClient)
 }
 
-func (g *GCPProvider) GetProjectInfo(projectReq *provider.ProjectRequest) (*project.ProjectInfo, error) {
-	logWriter, cleanupFunc := g.getProjectLogWriter(projectReq.Project.WorkspaceId, projectReq.Project.Name)
+func (g *GCPProvider) GetWorkspaceProviderMetadata(workspaceReq *provider.WorkspaceRequest) (string, error) {
+	logWriter, cleanupFunc := g.getWorkspaceLogWriter(workspaceReq.Workspace.Id, workspaceReq.Workspace.Name)
 	defer cleanupFunc()
 
-	dockerClient, err := g.getDockerClient(projectReq.Project.WorkspaceId)
+	dockerClient, err := g.getDockerClient(workspaceReq.Workspace.TargetId)
 	if err != nil {
 		logWriter.Write([]byte("Failed to get docker client: " + err.Error() + "\n"))
-		return nil, err
+		return "", err
 	}
 
-	return dockerClient.GetProjectInfo(projectReq.Project)
+	return dockerClient.GetWorkspaceProviderMetadata(workspaceReq.Workspace)
 }
 
-func (g *GCPProvider) getWorkspaceInfo(workspaceReq *provider.WorkspaceRequest) (*workspace.WorkspaceInfo, error) {
-	logWriter, cleanupFunc := g.getWorkspaceLogWriter(workspaceReq.Workspace.Id)
+func (g *GCPProvider) GetTargetProviderMetadata(targetReq *provider.TargetRequest) (string, error) {
+	logWriter, cleanupFunc := g.getTargetLogWriter(targetReq.Target.Id, targetReq.Target.Name)
 	defer cleanupFunc()
 
-	targetOptions, err := types.ParseTargetOptions(workspaceReq.TargetOptions)
+	targetOptions, err := types.ParseTargetOptions(targetReq.Target.TargetConfig.Options)
 	if err != nil {
 		logWriter.Write([]byte("Failed to parse target options: " + err.Error() + "\n"))
-		return nil, err
+		return "", err
 	}
 
-	vm, err := gcputil.GetComputeInstance(workspaceReq.Workspace, targetOptions)
+	vm, err := gcputil.GetComputeInstance(targetReq.Target, targetOptions)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	metadata := types.ToWorkspaceMetadata(vm)
+	metadata := types.ToTargetMetadata(vm)
+
 	jsonMetadata, err := json.Marshal(metadata)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	return &workspace.WorkspaceInfo{
-		Name:             workspaceReq.Workspace.Name,
-		ProviderMetadata: string(jsonMetadata),
-	}, nil
+	return string(jsonMetadata), nil
 }
 
-func (g *GCPProvider) getWorkspaceLogWriter(workspaceId string) (io.Writer, func()) {
+func (g *GCPProvider) getTargetLogWriter(targetId, targetName string) (io.Writer, func()) {
 	logWriter := io.MultiWriter(&logwriters.InfoLogWriter{})
 	cleanupFunc := func() {}
 
-	if g.LogsDir != nil {
-		loggerFactory := logs.NewLoggerFactory(g.LogsDir, nil)
-		wsLogWriter := loggerFactory.CreateWorkspaceLogger(workspaceId, logs.LogSourceProvider)
-		logWriter = io.MultiWriter(&logwriters.InfoLogWriter{}, wsLogWriter)
-		cleanupFunc = func() { wsLogWriter.Close() }
+	if g.TargetLogsDir != nil {
+		loggerFactory := logs.NewLoggerFactory(logs.LoggerFactoryConfig{
+			LogsDir:     *g.TargetLogsDir,
+			ApiUrl:      g.ApiUrl,
+			ApiKey:      g.ApiKey,
+			ApiBasePath: &logs.ApiBasePathTarget,
+		})
+		targetLogWriter, err := loggerFactory.CreateLogger(targetId, targetName, logs.LogSourceProvider)
+		if err == nil {
+			logWriter = io.MultiWriter(&logwriters.InfoLogWriter{}, targetLogWriter)
+			cleanupFunc = func() { targetLogWriter.Close() }
+		}
 	}
 
 	return logWriter, cleanupFunc
 }
 
-func (g *GCPProvider) getProjectLogWriter(workspaceId string, projectName string) (io.Writer, func()) {
+func (g *GCPProvider) getWorkspaceLogWriter(workspaceId, workspaceName string) (io.Writer, func()) {
 	logWriter := io.MultiWriter(&logwriters.InfoLogWriter{})
 	cleanupFunc := func() {}
 
-	if g.LogsDir != nil {
-		loggerFactory := logs.NewLoggerFactory(g.LogsDir, nil)
-		projectLogWriter := loggerFactory.CreateProjectLogger(workspaceId, projectName, logs.LogSourceProvider)
-		logWriter = io.MultiWriter(&logwriters.InfoLogWriter{}, projectLogWriter)
-		cleanupFunc = func() { projectLogWriter.Close() }
+	if g.WorkspaceLogsDir != nil {
+		loggerFactory := logs.NewLoggerFactory(logs.LoggerFactoryConfig{
+			LogsDir:     *g.WorkspaceLogsDir,
+			ApiUrl:      g.ApiUrl,
+			ApiKey:      g.ApiKey,
+			ApiBasePath: &logs.ApiBasePathWorkspace,
+		})
+		workspaceLogWriter, err := loggerFactory.CreateLogger(workspaceId, workspaceName, logs.LogSourceProvider)
+		if err == nil {
+			logWriter = io.MultiWriter(&logwriters.InfoLogWriter{}, workspaceLogWriter)
+			cleanupFunc = func() { workspaceLogWriter.Close() }
+		}
 	}
 
 	return logWriter, cleanupFunc
@@ -362,13 +350,13 @@ func (g *GCPProvider) CheckRequirements() (*[]provider.RequirementStatus, error)
 	return &results, nil
 }
 
-func getWorkspaceDir(workspaceId string) string {
-	return fmt.Sprintf("/home/daytona/%s", workspaceId)
+func getTargetDir(targetId string) string {
+	return fmt.Sprintf("/home/daytona/%s", targetId)
 }
 
-func getProjectDir(projectReq *provider.ProjectRequest) string {
+func getWorkspaceDir(workspaceReq *provider.WorkspaceRequest) string {
 	return path.Join(
-		getWorkspaceDir(projectReq.Project.WorkspaceId),
-		fmt.Sprintf("%s-%s", projectReq.Project.WorkspaceId, projectReq.Project.Name),
+		getTargetDir(workspaceReq.Workspace.TargetId),
+		fmt.Sprintf("%s-%s", workspaceReq.Workspace.TargetId, workspaceReq.Workspace.Name),
 	)
 }

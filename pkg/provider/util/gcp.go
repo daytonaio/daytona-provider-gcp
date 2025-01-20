@@ -9,12 +9,12 @@ import (
 	"cloud.google.com/go/compute/apiv1/computepb"
 	logwriters "github.com/daytonaio/daytona-provider-gcp/internal/log"
 	"github.com/daytonaio/daytona-provider-gcp/pkg/types"
-	"github.com/daytonaio/daytona/pkg/workspace"
+	"github.com/daytonaio/daytona/pkg/models"
 	"google.golang.org/api/option"
 )
 
-func CreateWorkspace(workspace *workspace.Workspace, opts *types.TargetOptions, initScript string, logWriter io.Writer) error {
-	envVars := workspace.EnvVars
+func CreateTarget(target *models.Target, opts *types.TargetOptions, initScript string, logWriter io.Writer) error {
+	envVars := target.EnvVars
 	envVars["DAYTONA_AGENT_LOG_FILE_PATH"] = "/home/daytona/.daytona-agent.log"
 
 	customData := `#!/bin/bash
@@ -64,7 +64,7 @@ After=network.target
 
 [Service]
 User=daytona
-ExecStart=/usr/local/bin/daytona agent --host
+ExecStart=/usr/local/bin/daytona agent --target
 Restart=always
 `
 
@@ -79,10 +79,10 @@ systemctl daemon-reload
 systemctl enable daytona-agent.service
 systemctl start daytona-agent.service
 `
-	return createComputeInstance(workspace.Id, customData, opts, logWriter)
+	return createComputeInstance(target.Id, customData, opts, logWriter)
 }
 
-func StartWorkspace(workspace *workspace.Workspace, opts *types.TargetOptions) error {
+func StartTarget(target *models.Target, opts *types.TargetOptions) error {
 	client, err := compute.NewInstancesRESTClient(context.Background(), option.WithCredentialsFile(opts.CredentialFile))
 	if err != nil {
 		return err
@@ -90,9 +90,9 @@ func StartWorkspace(workspace *workspace.Workspace, opts *types.TargetOptions) e
 	defer client.Close()
 
 	op, err := client.Start(context.Background(), &computepb.StartInstanceRequest{
-		Project:  opts.ProjectID,
+		Project:  opts.WorkspaceID,
 		Zone:     opts.Zone,
-		Instance: getResourceName(workspace.Id),
+		Instance: getResourceName(target.Id),
 	})
 	if err != nil {
 		return err
@@ -101,7 +101,7 @@ func StartWorkspace(workspace *workspace.Workspace, opts *types.TargetOptions) e
 	return op.Wait(context.Background())
 }
 
-func StopWorkspace(workspace *workspace.Workspace, opts *types.TargetOptions) error {
+func StopTarget(target *models.Target, opts *types.TargetOptions) error {
 	client, err := compute.NewInstancesRESTClient(context.Background(), option.WithCredentialsFile(opts.CredentialFile))
 	if err != nil {
 		return err
@@ -109,9 +109,9 @@ func StopWorkspace(workspace *workspace.Workspace, opts *types.TargetOptions) er
 	defer client.Close()
 
 	op, err := client.Stop(context.Background(), &computepb.StopInstanceRequest{
-		Project:  opts.ProjectID,
+		Project:  opts.WorkspaceID,
 		Zone:     opts.Zone,
-		Instance: getResourceName(workspace.Id),
+		Instance: getResourceName(target.Id),
 	})
 	if err != nil {
 		return err
@@ -120,7 +120,7 @@ func StopWorkspace(workspace *workspace.Workspace, opts *types.TargetOptions) er
 	return op.Wait(context.Background())
 }
 
-func DeleteWorkspace(workspace *workspace.Workspace, opts *types.TargetOptions) error {
+func DeleteTarget(target *models.Target, opts *types.TargetOptions) error {
 	client, err := compute.NewInstancesRESTClient(context.Background(), option.WithCredentialsFile(opts.CredentialFile))
 	if err != nil {
 		return err
@@ -128,9 +128,9 @@ func DeleteWorkspace(workspace *workspace.Workspace, opts *types.TargetOptions) 
 	defer client.Close()
 
 	op, err := client.Delete(context.Background(), &computepb.DeleteInstanceRequest{
-		Project:  opts.ProjectID,
+		Project:  opts.WorkspaceID,
 		Zone:     opts.Zone,
-		Instance: getResourceName(workspace.Id),
+		Instance: getResourceName(target.Id),
 	})
 	if err != nil {
 		return err
@@ -139,20 +139,20 @@ func DeleteWorkspace(workspace *workspace.Workspace, opts *types.TargetOptions) 
 	return op.Wait(context.Background())
 }
 
-func createComputeInstance(workspaceId string, initScript string, opts *types.TargetOptions, logWriter io.Writer) error {
+func createComputeInstance(targetId string, initScript string, opts *types.TargetOptions, logWriter io.Writer) error {
 	instancesClient, err := compute.NewInstancesRESTClient(context.Background(), option.WithCredentialsFile(opts.CredentialFile))
 	if err != nil {
 		return err
 	}
 	defer instancesClient.Close()
 
-	instanceName := getResourceName(workspaceId)
+	instanceName := getResourceName(targetId)
 	machineType := fmt.Sprintf("zones/%s/machineTypes/%s", opts.Zone, opts.MachineType)
-	diskType := fmt.Sprintf("projects/%s/zones/%s/diskTypes/%s", opts.ProjectID, opts.Zone, opts.DiskType)
+	diskType := fmt.Sprintf("projects/%s/zones/%s/diskTypes/%s", opts.WorkspaceID, opts.Zone, opts.DiskType)
 
 	spinner := logwriters.ShowSpinner(logWriter, "Creating GCP compute instance", "GCP compute instance created")
 	operation, err := instancesClient.Insert(context.Background(), &computepb.InsertInstanceRequest{
-		Project: opts.ProjectID,
+		Project: opts.WorkspaceID,
 		Zone:    opts.Zone,
 		InstanceResource: &computepb.Instance{
 			Name:        toPtr(instanceName),
@@ -200,7 +200,7 @@ func createComputeInstance(workspaceId string, initScript string, opts *types.Ta
 	return err
 }
 
-func GetComputeInstance(workspace *workspace.Workspace, opts *types.TargetOptions) (*computepb.Instance, error) {
+func GetComputeInstance(target *models.Target, opts *types.TargetOptions) (*computepb.Instance, error) {
 	client, err := compute.NewInstancesRESTClient(context.Background(), option.WithCredentialsFile(opts.CredentialFile))
 	if err != nil {
 		return nil, err
@@ -208,9 +208,9 @@ func GetComputeInstance(workspace *workspace.Workspace, opts *types.TargetOption
 	defer client.Close()
 
 	return client.Get(context.Background(), &computepb.GetInstanceRequest{
-		Project:  opts.ProjectID,
+		Project:  opts.WorkspaceID,
 		Zone:     opts.Zone,
-		Instance: getResourceName(workspace.Id),
+		Instance: getResourceName(target.Id),
 	})
 }
 

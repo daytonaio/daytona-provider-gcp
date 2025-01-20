@@ -5,16 +5,16 @@ import (
 	"testing"
 )
 
-func TestGetTargetManifest(t *testing.T) {
-	targetManifest := GetTargetManifest()
+func TestGetTargetConfigManifest(t *testing.T) {
+	targetManifest := GetTargetConfigManifest()
 	if targetManifest == nil {
-		t.Fatalf("Expected target manifest but got nil")
+		t.Fatalf("Expected target config manifest but got nil")
 	}
 
-	fields := [7]string{"Credential File", "Project Id", "Zone", "Machine Type", "Disk Type", "Disk Size", "VM Image"}
+	fields := [7]string{"Credential File", "Workspace Id", "Zone", "Machine Type", "Disk Type", "Disk Size", "VM Image"}
 	for _, field := range fields {
 		if _, ok := (*targetManifest)[field]; !ok {
-			t.Errorf("Expected field %s in target manifest but it was not found", field)
+			t.Errorf("Expected field %s in target config manifest but it was not found", field)
 		}
 	}
 }
@@ -31,7 +31,7 @@ func TestParseTargetOptions(t *testing.T) {
 			name: "Valid JSON with all fields",
 			optionsJson: `{
 				"Credential File": "/path/to/cred.json",
-				"PROJECT Id": "my-project",
+				"PROJECT Id": "my-workspace",
 				"Zone": "us-central1-a",
 				"Machine Type": "n1-standard-1",
 				"Disk Type": "pd-standard",
@@ -40,7 +40,7 @@ func TestParseTargetOptions(t *testing.T) {
 			}`,
 			want: &TargetOptions{
 				CredentialFile: "/path/to/cred.json",
-				ProjectID:      "my-project",
+				WorkspaceID:    "my-workspace",
 				Zone:           "us-central1-a",
 				MachineType:    "n1-standard-1",
 				DiskType:       "pd-standard",
@@ -60,11 +60,11 @@ func TestParseTargetOptions(t *testing.T) {
 			}`,
 			envVars: map[string]string{
 				"GCP_CREDENTIAL_FILE": "/env/path/to/cred.json",
-				"GCP_PROJECT_ID":      "env-project",
+				"GCP_PROJECT_ID":      "env-workspace",
 			},
 			want: &TargetOptions{
 				CredentialFile: "/env/path/to/cred.json",
-				ProjectID:      "env-project",
+				WorkspaceID:    "env-workspace",
 				Zone:           "us-central1-a",
 				MachineType:    "n1-standard-1",
 				DiskType:       "pd-standard",
@@ -75,7 +75,7 @@ func TestParseTargetOptions(t *testing.T) {
 		},
 		{
 			name:        "Invalid JSON",
-			optionsJson: `{"Credential File": "/path/to/cred.json", "PROJECT Id": "my-project"`,
+			optionsJson: `{"Credential File": "/path/to/cred.json", "PROJECT Id": "my-workspace"`,
 			wantErr:     true,
 		},
 		{
@@ -90,11 +90,11 @@ func TestParseTargetOptions(t *testing.T) {
 			optionsJson: `{}`,
 			envVars: map[string]string{
 				"GCP_CREDENTIAL_FILE": "/env/path/to/cred.json",
-				"GCP_PROJECT_ID":      "env-project",
+				"GCP_PROJECT_ID":      "env-workspace",
 			},
 			want: &TargetOptions{
 				CredentialFile: "/env/path/to/cred.json",
-				ProjectID:      "env-project",
+				WorkspaceID:    "env-workspace",
 			},
 			wantErr: false,
 		},
@@ -104,11 +104,11 @@ func TestParseTargetOptions(t *testing.T) {
 				"Credential File": "/path/to/cred.json"
 			}`,
 			envVars: map[string]string{
-				"GCP_PROJECT_ID": "env-project",
+				"GCP_PROJECT_ID": "env-workspace",
 			},
 			want: &TargetOptions{
 				CredentialFile: "/path/to/cred.json",
-				ProjectID:      "env-project",
+				WorkspaceID:    "env-workspace",
 			},
 			wantErr: false,
 		},
@@ -116,7 +116,7 @@ func TestParseTargetOptions(t *testing.T) {
 			name: "JSON with additional non-required fields",
 			optionsJson: `{
 				"Credential File": "/path/to/cred.json",
-				"PROJECT Id": "my-project",
+				"PROJECT Id": "my-workspace",
 				"Zone": "us-central1-a",
 				"Machine Type": "n1-standard-1",
 				"Disk Type": "pd-standard",
@@ -126,7 +126,7 @@ func TestParseTargetOptions(t *testing.T) {
 			}`,
 			want: &TargetOptions{
 				CredentialFile: "/path/to/cred.json",
-				ProjectID:      "my-project",
+				WorkspaceID:    "my-workspace",
 				Zone:           "us-central1-a",
 				MachineType:    "n1-standard-1",
 				DiskType:       "pd-standard",
