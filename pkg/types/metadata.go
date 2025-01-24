@@ -4,7 +4,7 @@ import (
 	"cloud.google.com/go/compute/apiv1/computepb"
 )
 
-type WorkspaceMetadata struct {
+type TargetMetadata struct {
 	VirtualMachineId   uint64
 	VirtualMachineName string
 	Platform           string
@@ -12,9 +12,9 @@ type WorkspaceMetadata struct {
 	Created            string
 }
 
-// ToWorkspaceMetadata converts and maps values from an *computepb.Instance to a WorkspaceMetadata.
-func ToWorkspaceMetadata(vm *computepb.Instance) WorkspaceMetadata {
-	return WorkspaceMetadata{
+// ToTargetMetadata converts and maps values from an *computepb.Instance to a TargetMetadata.
+func ToTargetMetadata(vm *computepb.Instance) TargetMetadata {
+	return TargetMetadata{
 		VirtualMachineId:   vm.GetId(),
 		VirtualMachineName: vm.GetName(),
 		Platform:           vm.GetCpuPlatform(),
